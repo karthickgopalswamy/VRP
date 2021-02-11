@@ -12,5 +12,7 @@ if __name__ == '__main__':
     print(sh)
     r = [np.asarray([0,1,2,3,2,1,3,0]),np.asarray([4,5,4,6,6,5])]
     print(rte2loc(r,sh))
+    print(rte2idx(r))
     r_numpy = np.asarray([0,1,2,3,2,1,3,0])
-    print(type(rte2loc(r_numpy,sh)))
+    print(rte2loc(r_numpy,sh))
+    print(rte2idx(r_numpy))

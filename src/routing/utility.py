@@ -23,17 +23,17 @@ def rte2idx(rtein):
 # % rte = [23   15   6   23   27   17   24   27   15   17   6   24];
 # % idx = rte2idx(rte)    % idx = 23   15   6   27   17   24
 
-    if not any(isinstance(i, list) for i in rtein): 
+    if not isinstance(rtein, list): 
         rte = [rtein]
     else:
         rte = rtein
 
     idx = [None]*(len(rte))
     for i in range(len(rte)):
-        idx[i] = rte[i][isorigin(rte[i])].item()
+        idx[i] = rte[i][isorigin(rte[i])]
 
-    if not any(isinstance(i, list) for i in rtein): 
-        idx = np.asarray(idx)
+    if not any([isinstance(rtein, list)]): 
+        idx = np.asarray(*idx)
 
     return idx
 

@@ -125,10 +125,10 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
             isL = isorigin(rte[i])
             tmin = np.zeros((np.size(isL),1))
             tmax = tmin.copy()
-            tmin[isL] = sh[rte[i][isL]].tbmin
-            tmin[np.invert(isL)] = sh[rte[i][np.invert(isL)]].temin
-            tmax[isL] = sh[rte[i][isL]].tbmax
-            tmax[np.invert(isL)] = sh[rte[i][np.invert(isL)]].temax
+            tmin[isL] = sh.tbmin[rte[i][isL]]
+            tmin[np.invert(isL)] = sh.temin[rte[i][np.invert(isL)]]
+            tmax[isL] = sh.tbmax[rte[i][isL]]
+            tmax[np.invert(isL)] = sh.temax[rte[i][np.invert(isL)]]
 
             TC[i],s,w= scanTW(t,tLU,tmin,tmax)
             if np.isinf(TC[i]): Xflg[i] = -5 
