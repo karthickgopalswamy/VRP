@@ -87,3 +87,156 @@ def rte2loc(rtein,sh):
     return loc
 
 
+
+def pairwisesavings(rteTC_h,sh,TC1,doZero):
+#   %PAIRWISESAVINGS Calculate pairwise savings.
+# % [IJS,S,TCij,Rij] = pairwisesavings(rteTC_h,sh,TC1,doNegSav)
+# % rteTC_h = handle to route total cost function, rteTC_h(rte)
+# %      sh = structure array with fields:
+# %          .b = beginning location of shipment
+# %          .e = ending location of shipment
+# %     TC1 = (optional) user-supplied independent shipment total cost
+# %         = rteTC_h([i i]) for shipment i, default
+# %  doZero = set negative savings values to zero
+# %         = true, default
+# %     IJS = savings list in nonincreasing order, where for row IJS(i,j,s)
+# %           s is savings associated with adding shipments i and j to route
+# %         = [], default, savings
+# %       S = savings matrix
+# %    TCij = pairwise total cost matrix
+# %     Rij = pairwise route cell array
+
+    n = len(sh)
+    S = np.zeros(n)
+    TCij = np.zeros(n)
+    Rij = []
+    if not TC1:
+        for i in range(n):
+            TC1[i] = rteTC_h([i,i])
+
+    for i in range(n-1):
+        for j in range(i+1,n,1):
+            [rij,tcij] = mincostinsert([i,i], [j,j], rteTC_h, sh)
+            s = TC1[i] + TC1[j] - TCij
+            if not(doZero) or s > 0:
+                S[i][j] = s
+                TCij[i][j] = tcij
+                Rij[i][j] = rij
+                Rij[j][i] = rij
+
+    s = S[i,j]
+    IJS = IJS[np.argsort(-s),:]
+    S = S + S.transpose()
+    TCij = TCij + TCij.transpose()
+    return [IJS,S,TCij,Rij]
+
+
+def savings(rteTC_h,sh,IJS,dodisp):
+# %SAVINGS Savings procedure for route construction.
+# %[rte,TC] = savings(rteTC_h,sh,IJS,dodisp)
+# %         = savings(rteTC_h,sh,IJS,prte_h)
+# % rteTC_h = handle to route total cost function, rteTC_h(rte)
+# %     sh  = structure array with fields:
+# %          .b = beginning location of shipment
+# %          .e = ending location of shipment
+# %     IJS = 3-column savings list
+# %         = pairwisesavings(rteTC_h)
+# %  dodisp = display intermediate results = false, default
+# %  prte_h = handle to route plotting function, prte_h(rte)
+# %           (dodisp = true when handle input)
+# %     rte = route vector
+# %         = m-element cell array of m route vectors
+# %   TC(i) = total cost of route i
+
+    TCr = []
+    if not IJS:
+        rte = []
+        return [rte,TCr]
+    if len(sh) < 2:
+        rte = [np.ones(2)]
+        TCr = rteTC_h(rte[1])
+        return [rte,TCr]
+
+    i = IJS[:,0]
+    j = IJS[:,1]
+
+    for k in range(len(sh)):
+        TC1[k] = rteTC_h([k,k])
+
+    if dodisp:
+        print('Savings \n')
+
+    inr = np.zeros((len(sh),1))
+    rte = []
+    did = []
+    Did = []
+    n = 0
+    done = False
+
+    while not done:
+        ischg = False
+        for k in range(len(i)):
+            ik = i[k]
+            jk = j[k]
+            if inr[ik] == 0 and inr[jk] == 0:
+                [rij,TCij] = mincostinsert([ik,ik],[jk,jk],rteTC_h,sh,True)
+                sij = TC1[ik] + TC1[jk] - TCij
+                if sij > 0:
+                    n = n + 1
+                    rte[n] = rij
+                    TCr[n] = TCij
+                    inr[ik] = n
+                    inr[jk] = n
+                    ischg = True
+                    did = [did; np.zeros((1,len(sh)))]
+                    Did = [Did, np.zeros((n-1,1)); np.zeros((1,n))]
+                    if dodisp:
+                        c = sum(rteTC_h(rte[not np.isnan(TCr)]))
+                        print('Make Rte %d using %d and %d\n',c,n,ik,jk)
+
+                elif inr[ik] != inr[jk]:
+                    if inr[ik] == 0:
+                        temp = jk
+                        jk = ik
+                        ik = temp
+                    if not did[inr[ik],jk]:
+                        [rij,TCij] = mincostinsert([jk,jk],rte[inr[ik]],rteTC_h,sh,True)
+                        did[inr[ik],jk] = True
+                        sij = TC1[jk] + TCr[inr[ik]] - TCij
+                        if sij > 0:
+                            rte[inr[ik]] = rij
+                            TCr[inr[ik]] = TCij
+                            inr[jk] = inr[ik]
+                            did[inr[ik],:] = False
+                            Did[inr[ik],:] = False
+                            Did[:,inr[ik]] = False
+                            if dodisp:
+                                c = sum(rteTC_h(rte[not np.isnan(TCr)]))
+                                print('Add %d to Rte %d\n',c,jk,inr[ik])
+
+                elif (inr[ik] != inr[jk]) and (not Did[inr[ik],inr[jk]]) or Did[inr[jk],inr[ik]]:
+                    [rij,TCij] = mincostinsert(rte[inr[ik]],rte[inr[jk]],rteTC_h,sh,True)
+                    Did[inr[ik],inr[jk]] = True
+                    Did[inr[jk],inr[ik]] = True
+                    if not np.isnan(rij):
+                        sij = TCr[inr[ik]] + TCr[inr[jk]] - TCij
+                        if sij > 0:
+                            inrjk = inr[jk]
+                            inr[rte[inrjk][isorigin(rte[inrjk])]] = inr[ik]
+                            rte[inrjk] = np.nan
+                            TCr[inrjk] = np.nan
+                            rte[inr[ik]] = rij
+                            TCr[inr[ik]] = TCij
+                            ischg = True
+                            if dodisp:
+                                c = sum(rteTC_h(rte[not np.isnan(TCr)]));
+                                print('Combine Rte %d to Rte %d\n',c,inrjk,inr(ik))
+
+        if not ischg or (not sum((not inr))):
+            done = True
+
+    if rte:
+        rte[np.isnan(TCr)] = []
+    if rte:
+        TCr[np.isnan[TCr]] = []
+    return [rte,TCr]

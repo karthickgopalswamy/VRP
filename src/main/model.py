@@ -1,5 +1,5 @@
 from routing import shipment, shipment_struct
-from utility import rte2loc, rte2idx
+from utility import rte2loc, rte2idx, pairwisesavings, savings
 from cost import rte_tc
 import numpy as np
 if __name__ == '__main__':
@@ -22,4 +22,5 @@ if __name__ == '__main__':
     print(rte2loc(r_numpy,sh))
     print(rte2idx(r_numpy))
     print(rte_tc(sh,r,C))
+    print(pairwisesavings(rte_tc,sh))
 
