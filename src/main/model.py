@@ -5,9 +5,9 @@ import numpy as np
 if __name__ == '__main__':
     b = np.asarray([i for i in range(10)])
     e = np.asarray([10+i for i in range(10)])
-    temin = np.Inf*np.ones(shape=b.shape)
+    temin = -np.Inf*np.ones(shape=b.shape)
     temax = np.Inf*np.ones(shape=b.shape)
-    tbmin = np.zeros(shape=b.shape)
+    tbmin = -np.Inf*np.ones(shape=b.shape)
     tbmax = np.Inf*np.ones(shape=b.shape)
     sh = shipment_struct(b,e,tbmin,tbmax,temin,temax)
     C = np.asarray(np.meshgrid(np.arange(0,20,1),np.arange(0,20,1)))

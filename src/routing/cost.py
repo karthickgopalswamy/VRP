@@ -104,7 +104,7 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
 
     for i in range(len(rte)):
         loc = rte2loc(rte[i],sh)
-        if any(map(lambda x: not(x) , loc)):
+        if any(map(lambda x: np.isnan(x) , loc)):
             Xflg[i] = -1
 
         if Xflg[i] < 0:

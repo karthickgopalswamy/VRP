@@ -41,9 +41,9 @@ class shipment:
         return self.__temax  
 
     def __str__(self):
-        return f"b: {self.b}, e: {self.e}, tbmin: {self.tbmin}, tbmax: {self.tbmin}, temin: {self.temin}, temax: {self.temax}"
+        return f"b: {self.b}, e: {self.e}, tbmin: {self.tbmin}, tbmax: {self.tbmax}, temin: {self.temin}, temax: {self.temax}"
     def __repr__(self):
-        return f"b: {self.b}, e: {self.e}, tbmin: {self.tbmin}, tbmax: {self.tbmin}, temin: {self.temin}, temax: {self.temax}"
+        return f"b: {self.b}, e: {self.e}, tbmin: {self.tbmin}, tbmax: {self.tbmax}, temin: {self.temin}, temax: {self.temax}"
 
 class shipment_struct:
     def __init__(self,b,e,tbmin,tbmax,temin,temax):
