@@ -1,4 +1,5 @@
 from routing import shipment_struct, driver
+from utility import rte2idx, rte2loc, isorigin
 from typing import List,Union
 import pandas as pd
 import numpy as np
@@ -10,24 +11,24 @@ def scanTW(t,tLU,b,e):
     n = b.shape[0]
 
     s = b[1] + tLU[1]
-    for i in range(1,n)  #Forward scan to determine earliest finish time
+    for i in range(1,n): #Forward scan to determine earliest finish time
         bi = b[i] + tLU[i]
         s = s + t[i] + tLU[i]
         if s < bi - tol:
             s = bi
         elif s > e[i] + tol:
-            TC = Inf 
+            TC = np.Inf 
             s = np.NaN
             w = np.NaN 
-            return
+            return (TC,s,w)
     f = s
 
-    s = f - tLU[n]
+    s = f - tLU[n-1]
     for i in range(n-2,-1,-1): #Reverse scan to determine latest start time for the
         # earliest finish
         s = s - t[i+1] - tLU[i]
         ei = e[i] - tLU[i]
-        if s > ei + tol
+        if (s > ei + tol):
             s = ei
 
     TC = f - s
@@ -35,8 +36,8 @@ def scanTW(t,tLU,b,e):
         TC = sum(t) + sum(tLU)  
 
 
-    s = np.hstack([s ,np.zeros(sjape=(1,n-1))])
-    w = np.zeros(shape=(1,n))
+    s = np.hstack([s ,np.zeros(shape=n-1)])
+    w = np.zeros(shape=n)
     for i in range(1,n):  # Second forward scan to delay waits as much as possible
         # to the end of the loc seq in case unexpected events occur
         s[i] = s[i-1] + tLU[i-1] + t[i]
@@ -83,10 +84,10 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
                         (= drive + wait + loading/unloading timespan)
     """
 
-    doTW = True if sh.tbmin else False
-    domaxTC = True if tr.maxTC else False
+    doTW = True if isinstance(sh.tbmin,np.ndarray) else False
+    domaxTC = True if tr and tr.maxTC else False
     doLU = False
-    if doTW and np.any((sh.tbmin > sh.tbmax) or (sh.temin > sh.temax)):
+    if doTW and np.any((sh.tbmin > sh.tbmax) | (sh.temin > sh.temax)):
         raise Exception('Min shipment time window exceeds max')
 
     rte = list(rte) if not isinstance(rte,List) else rte
@@ -102,7 +103,7 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
     out = pd.DataFrame(columns=cols,index=range(len(rte)))
 
     for i in range(len(rte)):
-        loc = rte2loc(rte[i],sh,tr)
+        loc = rte2loc(rte[i],sh)
         if any(map(lambda x: not(x) , loc)):
             Xflg[i] = -1
 
@@ -123,13 +124,12 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
         if Xflg[i] > 0 and doTW:   # Time Window Feasibility
             if not doLU: tLU = np.zeros(shape=loc.shape)
             isL = isorigin(rte[i])
-            tmin = np.zeros((np.size(isL),1))
+            tmin = np.zeros(isL.shape[0])
             tmax = tmin.copy()
             tmin[isL] = sh.tbmin[rte[i][isL]]
             tmin[np.invert(isL)] = sh.temin[rte[i][np.invert(isL)]]
             tmax[isL] = sh.tbmax[rte[i][isL]]
             tmax[np.invert(isL)] = sh.temax[rte[i][np.invert(isL)]]
-
             TC[i],s,w= scanTW(t,tLU,tmin,tmax)
             if np.isinf(TC[i]): Xflg[i] = -5 
 
@@ -149,5 +149,28 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
                 out.iloc[i].Depart = s + tLU
                 out.iloc[i].TWmax = tmax
                 out.iloc[i].Total = t + w + tLU
+    return (TC,Xflg,out)
 
+def loccost(loc, C):
+    # LOCCOST Calculate location sequence cost.
+    # c = loccost(loc,C)
+    #    loc = location vector
+    #      C = n x n matrix of costs between n locations
+    # 
+    #  Example:
+    #  loc = [1   2   4   3];
+    #    C = triu(magic(4),1); C = C + C'
+    #                                       C =  0   2   3  13
+    #                                            2   0  10   8
+    #                                            3  10   0  12
+    #                                           13   8  12   0
+    #  c = loccost(loc,C)
+    #                                       c =  2
+    #                                             8
+    #                                            12
 
+    if max(loc) > len(C):
+        raise ValueError('Location exceeds size of cost matrix.')
+
+    c = C[loc[:-1], loc[1:]]
+    return c

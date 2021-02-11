@@ -87,26 +87,3 @@ def rte2loc(rtein,sh):
     return loc
 
 
-def loccost(loc, C):
-# LOCCOST Calculate location sequence cost.
-# c = loccost(loc,C)
-#    loc = location vector
-#      C = n x n matrix of costs between n locations
-# 
-#  Example:
-#  loc = [1   2   4   3];
-#    C = triu(magic(4),1); C = C + C'
-#                                       C =  0   2   3  13
-#                                            2   0  10   8
-#                                            3  10   0  12
-#                                           13   8  12   0
-#  c = loccost(loc,C)
-#                                       c =  2
-#                                             8
-#                                            12
-
-  if max(loc) > len(C):
-    raise ValueError('Location exceeds size of cost matrix.')
-
-  c = np.diag(C[loc[:-1], loc[1:]])
-  return c
