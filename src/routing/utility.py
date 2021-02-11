@@ -240,3 +240,75 @@ def savings(rteTC_h,sh,IJS,dodisp):
     if rte:
         TCr[np.isnan[TCr]] = []
     return [rte,TCr]
+
+
+def mincostintert(rtei,rtej,rteTC_h,sh,doNaN):
+# MINCOSTINSERT Min cost insertion of route i into route j.
+# [rte,TC,TCij] = mincostinsert(rtei,rte,rteTC_h,sh,doNaN)
+#     rtei = route i vector
+#     rtej = route j vector
+#  rteTC_h = handle to route total cost function, rteTC_h(rte)
+#       sh = structure array with fields:
+#           .b = beginning location of shipment
+#           .e = ending location of shipment
+#    doNaN = return NaN for rte if cost increase
+#          = false, default
+#      rte = combined route vector
+#          = NaN if cost increase
+#       TC = total cost of combined route
+#     TCij = original total cost of routes i and j
+
+    rteiTC = rteTC_h(rtei) # import this function
+    rtejTC = rteTC_h(rte)
+
+    if (len(rte) < len(rtei)) or ((len(rte) == len(rtei)) and (rtejTC < rteiTC)):
+        temp = rte 
+        rte = rtei
+        rtei = temp
+
+    si = rte2idx(rtei) # import this function
+    for i in range(len(si)):
+        loc = rte2loc(rte,sh) # import this function
+        bloci = sh.b[si[i]]
+        isduploc = [False,loc[:-1] == loc[1:]]
+        [rte,minTC] = mincostshmtinsert(si[i],rte,rteTC_h,isduploc,loc,bloci)
+        if np.isinf(minTC):
+            return [rte,minTC,TCij]
+
+    if doNaN and (minTC >= rteiTC + rtejTC):
+        rte = np.nan
+
+    TCij = rteiTC + rtejTC
+    return [rte,minTC,TCij]
+
+
+
+def mincostshmtinsert(idx,rte,rteTC_h,isduploc,loc,bloci):
+    if sum(idx == rte2idx(rte)):
+        rte = np.nan
+        minTC = np.Inf
+        return [rte,minTC]
+
+    minTC = np.Inf
+    for i in range(len(rte)+1):
+        for j in range(i,len(rte)+1):
+            if (j>1) and (isduploc[j-1]):
+                continue
+
+            if (i<len(rte)+1) and (bloci == loc[i]) and rte[i] < 0:
+                break
+
+            rij = [rte[:i-1],idx,rte[i:j-1],idx,rte[j:]]
+            cij = rteTC_h(rij)
+
+            if cij < minTC:
+                minTC = cij
+                mini = i
+                minj = j
+
+    if not np.isinf(minTC):
+        rte = [rte[:mini-1],idx,rte[mini:minj-1],idx,rte[minj:]]
+    else:
+        rte = np.nan
+
+    return [rte,minTC]
