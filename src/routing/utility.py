@@ -1,5 +1,7 @@
 import numpy as np
-
+from sklearn.metrics.pairwise import haversine_distances as dist
+from itertools import compress
+from typing import Iterable
 def isorigin(rte):
 #   ISORIGIN Identify origin of each shipment in route.
 #   is = isorigin(rte)
@@ -37,6 +39,28 @@ def rte2idx(rtein):
 
     return idx
 
+
+def sh2rte(idx,rtein,rteTC_h):
+    idx = np.array(range(len(idx)))
+    if not isinstance(rtein,list) and len(rtein) > 0:
+        rte = [rtein]
+    else:
+        rte = rtein
+    if len(rte) > 0:
+        ri = rte2idx(np.concatenate(rte).ravel())
+    else:
+        ri = None
+    idx1 = np.setdiff1d(idx,ri)
+    n = len(rte)
+    for i in range(len(idx1)):
+        rte.append(np.array([idx1[i],idx1[i]]))
+    if rteTC_h:
+        # TC = rteTC_h(rte)
+        if len(idx1) > 0:
+            print('ADD SINGLE-SHIPMENT ROUTES:\n: Added shipments')#.format(sum(TC)))
+            print('{}\n\n'.format(idx1))
+    return (rte,idx1)
+
 def rte2loc(rtein,sh):
 # %RTE2LOC Convert route to location vector.
 # % loc = rte2loc(rte,sh)
@@ -69,9 +93,9 @@ def rte2loc(rtein,sh):
     else:
         rte = rtein
 
-    loc = [None]*(len(rte))
+    loc = [np.empty_like(ele) for ele in rte]
     for i in range(len(rte)):
-        if sum(rte[i]) is None:
+        if np.isnan(sum(rte[i])):
             loc[i] = np.nan
             continue
 
@@ -85,7 +109,7 @@ def rte2loc(rtein,sh):
             loc[i] = loc[i][:].transpose()
 
     if not any([isinstance(rtein, list)]): 
-        loc = np.asarray(*loc)
+        loc = loc[0]
 
     return loc
 
@@ -119,10 +143,10 @@ def pairwisesavings(rteTC_h,sh,TC1=None,doZero=True):
             TC1[i],_,_ = rteTC_h(np.array([i,i]))
 
     for i in range(n-1):
-        for j in range(i+1,n,1):
+        for j in range(i+1,n):
             rij,tcij,_ = mincostinsert(np.asarray([i,i]), np.array([j,j]), rteTC_h, sh)
             s = TC1[i] + TC1[j] - tcij
-            if not(doZero) or s.all() > 0:
+            if not(doZero) or s > 0:
                 S[i][j] = s
                 TCij[i][j] = tcij
                 Rij[i][j] = rij
@@ -154,14 +178,14 @@ def savings(rteTC_h,sh,IJS,dodisp):
 # %         = m-element cell array of m route vectors
 # %   TC(i) = total cost of route i
 
-    TCr = np.empty(shape=0)
+    TCr = []
     n = len(sh)
     if not IJS.size:
         rte = np.empty(shape=0)
         return [rte,TCr]
     if n < 2:
         rte = [np.zeros(2)]
-        TCr = rteTC_h(rte[1])
+        TCr,_,_ = rteTC_h(rte[1])
         return [rte,TCr]
 
     i = IJS[:,0].astype(np.int64)
@@ -173,11 +197,11 @@ def savings(rteTC_h,sh,IJS,dodisp):
     if dodisp:
         print('Savings \n')
 
-    inr = np.zeros(len(sh),dtype=np.int64)
-    rte = np.empty(shape=0,dtype=np.int64)
-    did = np.empty(shape=0)
-    Did = np.empty(shape=0)
-    n = 0
+    inr = -1*np.ones(len(sh),dtype=np.int64)
+    rte = []
+    did = np.empty(shape=(0,len(sh)))
+    Did = np.empty(shape=(0,0))
+    n = -1
     done = False
 
     while not done:
@@ -185,67 +209,79 @@ def savings(rteTC_h,sh,IJS,dodisp):
         for k in range(len(i)):
             ik = i[k]
             jk = j[k]
-            if inr[int(ik)] == 0 and inr[int(jk)] == 0:
+            if inr[int(ik)] == -1 and inr[int(jk)] == -1:
                 rij,TCij,_= mincostinsert(np.array([ik,ik]),np.array([jk,jk]),rteTC_h,sh,True)
                 sij = TC1[ik] + TC1[jk] - TCij
                 if sij > 0:
                     n = n + 1
-                    rte[n] = rij
-                    TCr[n] = TCij
+                    rte.append(rij)
+                    TCr.append(TCij)
                     inr[ik] = n
                     inr[jk] = n
                     ischg = True
-                    did = np.vstack([did, np.zeros((1,len(sh)))])
-                    Did = np.vstack([np.hstack([Did, np.zeros((n-1,1))]),np.zeros((1,n))])
+
+                    if n == 0:
+                        did = np.zeros((1,len(sh)))
+                        Did = np.array([[0]])
+                    else: 
+                        did = np.block([[did],[np.zeros((1,len(sh)))]])
+                        Did = np.block([[Did, np.zeros((n,1))],
+                                        [np.zeros((1,n+1))]
+                                        ])
                     if dodisp:
-                        c = sum(rteTC_h(rte[not np.isnan(TCr)]))
-                        print('Make Rte %d using %d and %d\n',c,n,ik,jk)
+                        tc,_,_ = rteTC_h(list(compress(rte,np.invert(np.isnan(TCr)))))
+                        c = sum(tc) if isinstance(tc,Iterable) else tc
+                        print('{0}: Make Rte {1} using {2} and {3}\n'.format(c,n,ik,jk))
 
-                elif inr[ik] != inr[jk]:
-                    if inr[ik] == 0:
-                        temp = jk
-                        jk = ik
-                        ik = temp
-                    if not did[inr[ik],jk]:
-                        [rij,TCij] = mincostinsert(np.array([jk,jk]),rte[inr[ik]],rteTC_h,sh,True)
-                        did[inr[ik],jk] = True
-                        sij = TC1[jk] + TCr[inr[ik]] - TCij
-                        if sij > 0:
-                            rte[inr[ik]] = rij
-                            TCr[inr[ik]] = TCij
-                            inr[jk] = inr[ik]
-                            did[inr[ik],:] = False
-                            Did[inr[ik],:] = False
-                            Did[:,inr[ik]] = False
-                            if dodisp:
-                                c = sum(rteTC_h(rte[not np.isnan(TCr)]))
-                                print('Add %d to Rte %d\n',c,jk,inr[ik])
+            elif np.logical_xor(inr[ik]+1,inr[jk]+1):
+                if inr[ik] == -1:
+                    ik,jk = jk,ik
+                if not did[inr[ik],jk]:
+                    if jk == 16:
+                        print('issue')
+                    rij,TCij,_ = mincostinsert(np.array([jk,jk]),rte[inr[ik]],rteTC_h,sh,True)
+                    did[inr[ik],jk] = True
+                    sij = TC1[jk] + TCr[inr[ik]] - TCij
+                    if sij > 0:
+                        rte[inr[ik]] = rij
+                        TCr[inr[ik]] = TCij
+                        inr[jk] = inr[ik]
+                        did[inr[ik],:] = False
+                        Did[inr[ik],:] = False
+                        Did[:,inr[ik]] = False
+                        if dodisp:
+                            tc,_,_ = rteTC_h(list(compress(rte,np.invert(np.isnan(TCr)))))
+                            c = sum(tc) if isinstance(tc,Iterable) else tc
+                            print('{0}: Add {1} to Rte {2}\n'.format(c,jk,inr[ik]))
 
-                elif (inr[ik] != inr[jk]) and not (Did[inr[ik],inr[jk]] or Did[inr[jk],inr[ik]]):
-                    [rij,TCij] = mincostinsert(rte[inr[ik]],rte[inr[jk]],rteTC_h,sh,True)
-                    Did[inr[ik],inr[jk]] = True
-                    Did[inr[jk],inr[ik]] = True
-                    if not np.isnan(rij):
-                        sij = TCr[inr[ik]] + TCr[inr[jk]] - TCij
-                        if sij > 0:
-                            inrjk = inr[jk]
-                            inr[rte[inrjk][isorigin(rte[inrjk])]] = inr[ik]
-                            rte[inrjk] = np.nan
-                            TCr[inrjk] = np.nan
-                            rte[inr[ik]] = rij
-                            TCr[inr[ik]] = TCij
-                            ischg = True
-                            if dodisp:
-                                c = sum(rteTC_h(rte[not np.isnan(TCr)]))
-                                print('Combine Rte %d to Rte %d\n',c,inrjk,inr[ik])
+            elif (inr[ik] != inr[jk]) and not (Did[inr[ik],inr[jk]] or Did[inr[jk],inr[ik]]):
+                rij,TCij,_ = mincostinsert(rte[inr[ik]],rte[inr[jk]],rteTC_h,sh,True)
+                Did[inr[ik],inr[jk]] = True
+                Did[inr[jk],inr[ik]] = True
+                if not np.isnan(rij).all():
+                    sij = TCr[inr[ik]] + TCr[inr[jk]] - TCij
+                    if sij > 0:
+                        inrjk = inr[jk]
+                        inr[rte[inrjk][isorigin(rte[inrjk])]] = inr[ik]
+                        rte[inrjk] = np.nan
+                        TCr[inrjk] = np.nan
+                        rte[inr[ik]] = rij
+                        TCr[inr[ik]] = TCij
+                        ischg = True
+                        if dodisp:
+                            tc,_,_ = rteTC_h(list(compress(rte,np.invert(np.isnan(TCr)))))
+                            c = sum(tc) if isinstance(tc,Iterable) else tc
+                            print('{0}: Combine Rte {1} to Rte {2}\n'.format(c,inrjk,inr[ik]))
 
-        if not ischg or (not sum((not inr))):
+        if not ischg or np.all(inr >=0):
             done = True
 
     if rte:
-        rte[np.isnan(TCr)] = np.empty(shape=0)
+        rte = list(compress(rte,np.invert(np.isnan(TCr))))
+        # rte[np.isnan(TCr)] = np.empty(shape=0)
     if rte:
-        TCr[np.isnan[TCr]] = np.empty(shape=0)
+        TCr = list(compress(TCr,np.invert(np.isnan(TCr))))
+        # TCr[np.isnan[TCr]] = np.empty(shape=0)
     return [rte,TCr]
 
 
@@ -269,15 +305,13 @@ def mincostinsert(rtei,rte,rteTC_h,sh,doNaN=False):
     rtejTC,_,_ = rteTC_h(rte)
 
     if (len(rte) < len(rtei)) or ((len(rte) == len(rtei)) and (rtejTC < rteiTC)):
-        temp = rte 
-        rte = rtei
-        rtei = temp
+        rte, rtei = rtei,rte
 
     si = rte2idx(rtei) # import this function
     for i in range(len(si)):
         loc = rte2loc(rte,sh) # import this function
         bloci = sh.b[si[i]]
-        isduploc = [False,loc[:-1] == loc[1:]]
+        isduploc = np.hstack([False,loc[:-1] == loc[1:]])
         [rte,minTC] = mincostshmtinsert(si[i],rte,rteTC_h,isduploc,loc,bloci)
         if np.isinf(minTC):
             return [rte,minTC,np.Inf]
@@ -300,7 +334,7 @@ def mincostshmtinsert(idx,rte,rteTC_h,isduploc,loc,bloci):
     minTC = np.Inf
     for i in range(len(rte)+1):
         for j in range(i,len(rte)+1):
-            if (j>1) and (isduploc[j-1]):
+            if (j>0) and (isduploc[j-1]):
                 continue
 
             if (i<len(rte)) and (bloci == loc[i]) and rte[i] < 0:
@@ -320,3 +354,9 @@ def mincostshmtinsert(idx,rte,rteTC_h,isduploc,loc,bloci):
         rte = np.nan
 
     return [rte,minTC]
+
+ 
+def get_distance(points):
+    """points assumed to be latitue and longitude in  m"""
+    return dist(np.radians(points))*6371*1000
+    
