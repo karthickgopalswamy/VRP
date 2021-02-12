@@ -18,9 +18,11 @@ if __name__ == '__main__':
     r = [np.asarray([0,1,2,3,2,1,3,0]),np.asarray([4,5,4,6,6,5])]
     print(rte2loc(r,sh))
     print(rte2idx(r))
-    r_numpy = np.asarray([0,1,2,3,2,1,3,0])
+    r_numpy = np.asarray([0,1,0,1])
     print(rte2loc(r_numpy,sh))
     print(rte2idx(r_numpy))
     print(rte_tc(sh,r,C))
-    print(pairwisesavings(rte_tc,sh))
+    rte_h = lambda x: rte_tc(sh,x,C)
+    IJS,S,TCij,Rij = pairwisesavings(rte_h,sh)
+    print(savings(rte_h,sh,IJS,dodisp=True))
 

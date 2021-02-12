@@ -60,6 +60,9 @@ def rte2loc(rtein,sh):
 # % rte = [1   2  -2  -1];
 # %  sh = vect2struct('b',[1 2],'e',[3 4]);
 # % loc = rte2loc(rte,sh)               % loc = 1   2   4   3
+    # if  any([isinstance(i, int) for i in rtein]): 
+    #     if not isinstance(rtein,np.ndarray):
+    #         rte = np.asarray(rtein)
 
     if not isinstance(rtein, list): 
         rte = [rtein]
@@ -88,7 +91,7 @@ def rte2loc(rtein,sh):
 
 
 
-def pairwisesavings(rteTC_h,sh,TC1,doZero):
+def pairwisesavings(rteTC_h,sh,TC1=None,doZero=True):
 #   %PAIRWISESAVINGS Calculate pairwise savings.
 # % [IJS,S,TCij,Rij] = pairwisesavings(rteTC_h,sh,TC1,doNegSav)
 # % rteTC_h = handle to route total cost function, rteTC_h(rte)
@@ -107,24 +110,27 @@ def pairwisesavings(rteTC_h,sh,TC1,doZero):
 # %     Rij = pairwise route cell array
 
     n = len(sh)
-    S = np.zeros(n)
-    TCij = np.zeros(n)
-    Rij = []
+    S = np.zeros(shape=(n,n))
+    TCij = np.zeros(shape=(n,n))
+    Rij = [[None]*n for i in range(n)]
     if not TC1:
+        TC1 = np.zeros(n)
         for i in range(n):
-            TC1[i] = rteTC_h([i,i])
+            TC1[i],_,_ = rteTC_h(np.array([i,i]))
 
     for i in range(n-1):
         for j in range(i+1,n,1):
-            [rij,tcij] = mincostinsert([i,i], [j,j], rteTC_h, sh)
-            s = TC1[i] + TC1[j] - TCij
-            if not(doZero) or s > 0:
+            rij,tcij,_ = mincostinsert(np.asarray([i,i]), np.array([j,j]), rteTC_h, sh)
+            s = TC1[i] + TC1[j] - tcij
+            if not(doZero) or s.all() > 0:
                 S[i][j] = s
                 TCij[i][j] = tcij
                 Rij[i][j] = rij
                 Rij[j][i] = rij
 
+    i,j = S.nonzero()
     s = S[i,j]
+    IJS = np.vstack([i,j,s]).transpose()
     IJS = IJS[np.argsort(-s),:]
     S = S + S.transpose()
     TCij = TCij + TCij.transpose()
@@ -148,28 +154,29 @@ def savings(rteTC_h,sh,IJS,dodisp):
 # %         = m-element cell array of m route vectors
 # %   TC(i) = total cost of route i
 
-    TCr = []
-    if not IJS:
-        rte = []
+    TCr = np.empty(shape=0)
+    n = len(sh)
+    if not IJS.size:
+        rte = np.empty(shape=0)
         return [rte,TCr]
-    if len(sh) < 2:
-        rte = [np.ones(2)]
+    if n < 2:
+        rte = [np.zeros(2)]
         TCr = rteTC_h(rte[1])
         return [rte,TCr]
 
-    i = IJS[:,0]
-    j = IJS[:,1]
-
-    for k in range(len(sh)):
-        TC1[k] = rteTC_h([k,k])
+    i = IJS[:,0].astype(np.int64)
+    j = IJS[:,1].astype(np.int64)
+    TC1 = np.zeros(n)
+    for k in range(n):
+        TC1[k],_,_ = rteTC_h(np.array([k,k]))
 
     if dodisp:
         print('Savings \n')
 
-    inr = np.zeros((len(sh),1))
-    rte = []
-    did = []
-    Did = []
+    inr = np.zeros(len(sh),dtype=np.int64)
+    rte = np.empty(shape=0,dtype=np.int64)
+    did = np.empty(shape=0)
+    Did = np.empty(shape=0)
     n = 0
     done = False
 
@@ -178,8 +185,8 @@ def savings(rteTC_h,sh,IJS,dodisp):
         for k in range(len(i)):
             ik = i[k]
             jk = j[k]
-            if inr[ik] == 0 and inr[jk] == 0:
-                [rij,TCij] = mincostinsert([ik,ik],[jk,jk],rteTC_h,sh,True)
+            if inr[int(ik)] == 0 and inr[int(jk)] == 0:
+                rij,TCij,_= mincostinsert(np.array([ik,ik]),np.array([jk,jk]),rteTC_h,sh,True)
                 sij = TC1[ik] + TC1[jk] - TCij
                 if sij > 0:
                     n = n + 1
@@ -188,8 +195,8 @@ def savings(rteTC_h,sh,IJS,dodisp):
                     inr[ik] = n
                     inr[jk] = n
                     ischg = True
-                    did = [did; np.zeros((1,len(sh)))]
-                    Did = [Did, np.zeros((n-1,1)); np.zeros((1,n))]
+                    did = np.vstack([did, np.zeros((1,len(sh)))])
+                    Did = np.vstack([np.hstack([Did, np.zeros((n-1,1))]),np.zeros((1,n))])
                     if dodisp:
                         c = sum(rteTC_h(rte[not np.isnan(TCr)]))
                         print('Make Rte %d using %d and %d\n',c,n,ik,jk)
@@ -200,7 +207,7 @@ def savings(rteTC_h,sh,IJS,dodisp):
                         jk = ik
                         ik = temp
                     if not did[inr[ik],jk]:
-                        [rij,TCij] = mincostinsert([jk,jk],rte[inr[ik]],rteTC_h,sh,True)
+                        [rij,TCij] = mincostinsert(np.array([jk,jk]),rte[inr[ik]],rteTC_h,sh,True)
                         did[inr[ik],jk] = True
                         sij = TC1[jk] + TCr[inr[ik]] - TCij
                         if sij > 0:
@@ -214,7 +221,7 @@ def savings(rteTC_h,sh,IJS,dodisp):
                                 c = sum(rteTC_h(rte[not np.isnan(TCr)]))
                                 print('Add %d to Rte %d\n',c,jk,inr[ik])
 
-                elif (inr[ik] != inr[jk]) and (not Did[inr[ik],inr[jk]]) or Did[inr[jk],inr[ik]]:
+                elif (inr[ik] != inr[jk]) and not (Did[inr[ik],inr[jk]] or Did[inr[jk],inr[ik]]):
                     [rij,TCij] = mincostinsert(rte[inr[ik]],rte[inr[jk]],rteTC_h,sh,True)
                     Did[inr[ik],inr[jk]] = True
                     Did[inr[jk],inr[ik]] = True
@@ -229,20 +236,20 @@ def savings(rteTC_h,sh,IJS,dodisp):
                             TCr[inr[ik]] = TCij
                             ischg = True
                             if dodisp:
-                                c = sum(rteTC_h(rte[not np.isnan(TCr)]));
-                                print('Combine Rte %d to Rte %d\n',c,inrjk,inr(ik))
+                                c = sum(rteTC_h(rte[not np.isnan(TCr)]))
+                                print('Combine Rte %d to Rte %d\n',c,inrjk,inr[ik])
 
         if not ischg or (not sum((not inr))):
             done = True
 
     if rte:
-        rte[np.isnan(TCr)] = []
+        rte[np.isnan(TCr)] = np.empty(shape=0)
     if rte:
-        TCr[np.isnan[TCr]] = []
+        TCr[np.isnan[TCr]] = np.empty(shape=0)
     return [rte,TCr]
 
 
-def mincostintert(rtei,rtej,rteTC_h,sh,doNaN):
+def mincostinsert(rtei,rte,rteTC_h,sh,doNaN=False):
 # MINCOSTINSERT Min cost insertion of route i into route j.
 # [rte,TC,TCij] = mincostinsert(rtei,rte,rteTC_h,sh,doNaN)
 #     rtei = route i vector
@@ -258,8 +265,8 @@ def mincostintert(rtei,rtej,rteTC_h,sh,doNaN):
 #       TC = total cost of combined route
 #     TCij = original total cost of routes i and j
 
-    rteiTC = rteTC_h(rtei) # import this function
-    rtejTC = rteTC_h(rte)
+    rteiTC,_,_ = rteTC_h(rtei) # import this function
+    rtejTC,_,_ = rteTC_h(rte)
 
     if (len(rte) < len(rtei)) or ((len(rte) == len(rtei)) and (rtejTC < rteiTC)):
         temp = rte 
@@ -273,7 +280,7 @@ def mincostintert(rtei,rtej,rteTC_h,sh,doNaN):
         isduploc = [False,loc[:-1] == loc[1:]]
         [rte,minTC] = mincostshmtinsert(si[i],rte,rteTC_h,isduploc,loc,bloci)
         if np.isinf(minTC):
-            return [rte,minTC,TCij]
+            return [rte,minTC,np.Inf]
 
     if doNaN and (minTC >= rteiTC + rtejTC):
         rte = np.nan
@@ -284,6 +291,7 @@ def mincostintert(rtei,rtej,rteTC_h,sh,doNaN):
 
 
 def mincostshmtinsert(idx,rte,rteTC_h,isduploc,loc,bloci):
+
     if sum(idx == rte2idx(rte)):
         rte = np.nan
         minTC = np.Inf
@@ -295,11 +303,11 @@ def mincostshmtinsert(idx,rte,rteTC_h,isduploc,loc,bloci):
             if (j>1) and (isduploc[j-1]):
                 continue
 
-            if (i<len(rte)+1) and (bloci == loc[i]) and rte[i] < 0:
+            if (i<len(rte)) and (bloci == loc[i]) and rte[i] < 0:
                 break
 
-            rij = [rte[:i-1],idx,rte[i:j-1],idx,rte[j:]]
-            cij = rteTC_h(rij)
+            rij = np.hstack([rte[:i],idx,rte[i:j],idx,rte[j:]])
+            cij,_,_ = rteTC_h(rij)
 
             if cij < minTC:
                 minTC = cij
@@ -307,7 +315,7 @@ def mincostshmtinsert(idx,rte,rteTC_h,isduploc,loc,bloci):
                 minj = j
 
     if not np.isinf(minTC):
-        rte = [rte[:mini-1],idx,rte[mini:minj-1],idx,rte[minj:]]
+        rte = np.hstack([rte[:mini],idx,rte[mini:minj],idx,rte[minj:]])
     else:
         rte = np.nan
 

@@ -83,14 +83,13 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
                 Total   = total timespan from departing loc j-1 to depart loc j
                         (= drive + wait + loading/unloading timespan)
     """
-
     doTW = True if isinstance(sh.tbmin,np.ndarray) else False
     domaxTC = True if tr and tr.maxTC else False
     doLU = False
     if doTW and np.any((sh.tbmin > sh.tbmax) | (sh.temin > sh.temax)):
         raise Exception('Min shipment time window exceeds max')
 
-    rte = list(rte) if not isinstance(rte,List) else rte
+    rte = [np.array(rte)] if not isinstance(rte,List) or isinstance(rte[0],int) else rte
 
     TC = np.zeros(shape=(len(rte),1),dtype=np.float64)
     Xflg = np.ones(shape=(len(rte),1),dtype=np.int64)
@@ -149,7 +148,7 @@ def rte_tc(sh:shipment_struct, rte:List[np.array],C:np.ndarray,tr:Union[None,dri
                 out.iloc[i].Depart = s + tLU
                 out.iloc[i].TWmax = tmax
                 out.iloc[i].Total = t + w + tLU
-    return (TC,Xflg,out)
+    return (TC.item() if TC.size==1 else TC,Xflg,out)
 
 def loccost(loc, C):
     # LOCCOST Calculate location sequence cost.
