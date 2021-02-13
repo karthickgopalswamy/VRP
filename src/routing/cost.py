@@ -159,20 +159,25 @@ def loccost(loc, C):
     #    loc = location vector
     #      C = n x n matrix of costs between n locations
     # 
-    #  Example:
-    #  loc = [1   2   4   3];
-    #    C = triu(magic(4),1); C = C + C'
-    #                                       C =  0   2   3  13
-    #                                            2   0  10   8
-    #                                            3  10   0  12
-    #                                           13   8  12   0
-    #  c = loccost(loc,C)
-    #                                       c =  2
-    #                                             8
-    #                                            12
-
     if max(loc) > len(C):
         raise ValueError('Location exceeds size of cost matrix.')
 
     c = C[loc[:-1], loc[1:]]
     return c
+
+
+def get_metrics(pdf:pd.DataFrame):
+    """ 
+    Params:
+        Pd.DataFrame consisting of the following schema
+
+        [region_id  Route_ID  Route_Point_Index  Location  isPickup  Delivery_ID  Route_Point_Time  created_time  route_count]
+
+
+    Returns:
+        The average wait time of the customer. This is sum of (Delivery time - created time) for each customer /Totalnumber of customers
+    """
+    mean_time = pdf.apply(lambda x: (x.Route_Point_Time - x.created_time) if not x.isPickup else 0, axis = 1).sum()/pdf.Delivery_ID.nunique()
+
+    deliveries_ph = 3600*pdf.Delivery_ID.nunique()/pdf.groupby('Route_ID').apply(lambda x: (x.Route_Point_Time.max() - x.Route_Point_Time.min())).sum()
+    return mean_time, deliveries_ph

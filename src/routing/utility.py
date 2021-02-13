@@ -14,17 +14,19 @@ def isorigin(rte):
   return i
 
 def rte2idx(rtein):
-# %RTE2IDX Convert route to shipment index vector.
-# % idx = rte2idx(rte)
-# %   rte = route vector
-# %       = m-element cell array of m route vectors
-# %   idx = shipment index vector, such that idx = rte(isorigin(rte))
-# %       = m-element cell array of m shipment index vectors
-# %       
-# % Example:
-# % rte = [23   15   6   23   27   17   24   27   15   17   6   24];
-# % idx = rte2idx(rte)    % idx = 23   15   6   27   17   24
-
+# """
+# RTE2IDX Convert route to shipment index vector.
+#     Params:
+#         rte = route vector
+#             = m-element list of m route vectors
+#     Returns:
+#         idx = shipment index vector, such that idx = rte(isorigin(rte))
+#             = m-element list of m shipment index vectors
+       
+#     Example:
+#     rte = [23   15   6   23   27   17   24   27   15   17   6   24];
+#     idx = rte2idx(rte)     idx = 23   15   6   27   17   24
+    
     if not isinstance(rtein, list): 
         rte = [rtein]
     else:
@@ -55,38 +57,28 @@ def sh2rte(idx,rtein,rteTC_h):
     for i in range(len(idx1)):
         rte.append(np.array([idx1[i],idx1[i]]))
     if rteTC_h:
-        # TC = rteTC_h(rte)
         if len(idx1) > 0:
-            print('ADD SINGLE-SHIPMENT ROUTES:\n: Added shipments')#.format(sum(TC)))
+            print('ADD SINGLE-SHIPMENT ROUTES:\n: Added shipments')
             print('{}\n\n'.format(idx1))
     return (rte,idx1)
 
 def rte2loc(rtein,sh):
-# %RTE2LOC Convert route to location vector.
-# % loc = rte2loc(rte,sh)
-# %     = rte2loc(rte,sh,tr) % Include beginning/ending truck locations
-# %   rte = route vector
-# %       = m-element cell array of m route vectors
-# %    sh = structure array with fields:
-# %        .b = beginning location of shipment
-# %        .e = ending location of shipment
-# %    tr = (optional) structure with fields:
-# %        .b = beginning location of truck
-# %           = sh(rte(1)).b, default
-# %        .e = ending location of truck
-# %           = sh(rte(end)).e, default
-# %   loc = location vector
-# %       = m-element cell array of m location vectors
-# %       = NaN, degenerate location vector, which occurs if bloc = eloc and
-# %         truck returns to eloc before end of route (=> > one route)
-# %
-# % Example:
-# % rte = [1   2  -2  -1];
-# %  sh = vect2struct('b',[1 2],'e',[3 4]);
-# % loc = rte2loc(rte,sh)               % loc = 1   2   4   3
-    # if  any([isinstance(i, int) for i in rtein]): 
-    #     if not isinstance(rtein,np.ndarray):
-    #         rte = np.asarray(rtein)
+
+# """
+#     RTE2LOC Convert route to location vector.
+#     Params:
+#         loc = rte2loc(rte,sh)
+#             = rte2loc(rte,sh,tr)  Include beginning/ending truck locations
+#         rte = route vector
+#             = m-element cell array of m route vectors
+#         sh = shiment struct with fields:
+#             .b = beginning location of shipment
+#             .e = ending location of shipment
+#     Returns:
+#         loc = location vector
+#             = m-element List of m location vectors"""
+
+
 
     if not isinstance(rtein, list): 
         rte = [rtein]
@@ -116,22 +108,26 @@ def rte2loc(rtein,sh):
 
 
 def pairwisesavings(rteTC_h,sh,TC1=None,doZero=True):
-#   %PAIRWISESAVINGS Calculate pairwise savings.
-# % [IJS,S,TCij,Rij] = pairwisesavings(rteTC_h,sh,TC1,doNegSav)
-# % rteTC_h = handle to route total cost function, rteTC_h(rte)
-# %      sh = structure array with fields:
-# %          .b = beginning location of shipment
-# %          .e = ending location of shipment
-# %     TC1 = (optional) user-supplied independent shipment total cost
-# %         = rteTC_h([i i]) for shipment i, default
-# %  doZero = set negative savings values to zero
-# %         = true, default
-# %     IJS = savings list in nonincreasing order, where for row IJS(i,j,s)
-# %           s is savings associated with adding shipments i and j to route
-# %         = [], default, savings
-# %       S = savings matrix
-# %    TCij = pairwise total cost matrix
-# %     Rij = pairwise route cell array
+
+# """
+#   PAIRWISESAVINGS Calculate pairwise savings.
+#  [IJS,S,TCij,Rij] = pairwisesavings(rteTC_h,sh,TC1,doNegSav)
+#     Params:
+#         rteTC_h = lambda handle to route total cost function, rteTC_h(rte)
+#             sh = structure array with fields:
+#                 .b = beginning location of shipment
+#                 .e = ending location of shipment
+#             TC1 = (optional) user-supplied independent shipment total cost
+#                 = rteTC_h([i i]) for shipment i, default
+#         doZero = set negative savings values to zero
+#             = true, default
+#     Returns:
+#         IJS = savings list in nonincreasing order, where for row IJS(i,j,s)
+#             s is savings associated with adding shipments i and j to route
+#             = [], default, savings
+#         S = savings matrix
+#         TCij = pairwise total cost matrix
+#         Rij = pairwise route list"""
 
     n = len(sh)
     S = np.zeros(shape=(n,n))
@@ -162,21 +158,21 @@ def pairwisesavings(rteTC_h,sh,TC1=None,doZero=True):
 
 
 def savings(rteTC_h,sh,IJS,dodisp):
-# %SAVINGS Savings procedure for route construction.
-# %[rte,TC] = savings(rteTC_h,sh,IJS,dodisp)
-# %         = savings(rteTC_h,sh,IJS,prte_h)
-# % rteTC_h = handle to route total cost function, rteTC_h(rte)
-# %     sh  = structure array with fields:
-# %          .b = beginning location of shipment
-# %          .e = ending location of shipment
-# %     IJS = 3-column savings list
-# %         = pairwisesavings(rteTC_h)
-# %  dodisp = display intermediate results = false, default
-# %  prte_h = handle to route plotting function, prte_h(rte)
-# %           (dodisp = true when handle input)
-# %     rte = route vector
-# %         = m-element cell array of m route vectors
-# %   TC(i) = total cost of route i
+    # SAVINGS Savings procedure for route construction.
+    # [rte,TC] = savings(rteTC_h,sh,IJS,dodisp)
+    #          = savings(rteTC_h,sh,IJS,prte_h)
+    #  rteTC_h = handle to route total cost function, rteTC_h(rte)
+    #      sh  = structure array with fields:
+    #           .b = beginning location of shipment
+    #           .e = ending location of shipment
+    #      IJS = 3-column savings list
+    #          = pairwisesavings(rteTC_h)
+    #   dodisp = display intermediate results = false, default
+    #   prte_h = handle to route plotting function, prte_h(rte)
+    #            (dodisp = true when handle input)
+    #      rte = route vector
+    #          = m-element cell array of m route vectors
+    #    TC(i) = total cost of route i
 
     TCr = []
     n = len(sh)
@@ -237,8 +233,6 @@ def savings(rteTC_h,sh,IJS,dodisp):
                 if inr[ik] == -1:
                     ik,jk = jk,ik
                 if not did[inr[ik],jk]:
-                    if jk == 16:
-                        print('issue')
                     rij,TCij,_ = mincostinsert(np.array([jk,jk]),rte[inr[ik]],rteTC_h,sh,True)
                     did[inr[ik],jk] = True
                     sij = TC1[jk] + TCr[inr[ik]] - TCij
